@@ -47,12 +47,22 @@ function resolveImage(src) {
   return src;
 }
 
+function parseTableRow(line) {
+  return line.replace(/^\||\|$/g, '').split('|').map(c => c.trim());
+}
+
+function isTableSep(line) {
+  return /^\|?[\s\-:|]+(\|[\s\-:|]+)*\|?$/.test(line) && line.includes('-');
+}
+
 function parseMarkdown(source) {
   const lines = source.replace(/\r\n/g, '\n').split('\n');
   const blocks = [];
   let list = [];
   let ordered = [];
   let para = [];
+  let tableRows = [];
+  let tableHasHeader = false;
 
   function flushPara() {
     if (para.length) {
@@ -64,26 +74,61 @@ function parseMarkdown(source) {
     if (list.length) blocks.push({ type: 'ul', items: list.splice(0) });
     if (ordered.length) blocks.push({ type: 'ol', items: ordered.splice(0) });
   }
+  function flushTable() {
+    if (tableRows.length) {
+      blocks.push({ type: 'table', rows: tableRows.splice(0), hasHeader: tableHasHeader });
+      tableHasHeader = false;
+    }
+  }
 
-  for (const raw of lines) {
+  for (let i = 0; i < lines.length; i++) {
+    const raw = lines[i];
     const line = raw.trim();
+
+    // 表格检测：当前行是 | 开头，下一行是分隔线
+    if (/^\|/.test(line)) {
+      const nextLine = (lines[i + 1] || '').trim();
+      if (tableRows.length === 0 && isTableSep(nextLine)) {
+        // 这是表头行
+        flushPara(); flushList();
+        tableRows.push({ cells: parseTableRow(line), isHeader: true });
+        tableHasHeader = true;
+        i++; // 跳过分隔线
+        continue;
+      } else if (tableRows.length > 0) {
+        // 已在表格中，继续收集行
+        tableRows.push({ cells: parseTableRow(line), isHeader: false });
+        continue;
+      } else if (isTableSep(line)) {
+        // 纯分隔线，跳过
+        continue;
+      }
+    } else if (tableRows.length > 0) {
+      // 不是表格行了，flush 表格
+      flushTable();
+    }
+
     if (!line) {
       flushPara();
       flushList();
+      flushTable();
       continue;
     }
-    if (/^#\s+/.test(line)) { flushPara(); flushList(); blocks.push({ type: 'h1', text: line.replace(/^#\s+/, '') }); continue; }
-    if (/^##\s+/.test(line)) { flushPara(); flushList(); blocks.push({ type: 'h2', text: line.replace(/^##\s+/, '') }); continue; }
-    if (/^###\s+/.test(line)) { flushPara(); flushList(); blocks.push({ type: 'h3', text: line.replace(/^###\s+/, '') }); continue; }
-    if (/^>\s?/.test(line)) { flushPara(); flushList(); blocks.push({ type: 'quote', text: line.replace(/^>\s?/, '') }); continue; }
+    if (/^#\s+/.test(line)) { flushPara(); flushList(); flushTable(); blocks.push({ type: 'h1', text: line.replace(/^#\s+/, '') }); continue; }
+    if (/^##\s+/.test(line)) { flushPara(); flushList(); flushTable(); blocks.push({ type: 'h2', text: line.replace(/^##\s+/, '') }); continue; }
+    if (/^###\s+/.test(line)) { flushPara(); flushList(); flushTable(); blocks.push({ type: 'h3', text: line.replace(/^###\s+/, '') }); continue; }
+    if (/^>\s?/.test(line)) { flushPara(); flushList(); flushTable(); blocks.push({ type: 'quote', text: line.replace(/^>\s?/, '') }); continue; }
     const imgMatch = line.match(/^!\[([^\]]*)\]\(([^)]+)\)$/);
-    if (imgMatch) { flushPara(); flushList(); const p = imgMatch[1].split('|'); blocks.push({ type: 'img', alt: p[0].trim(), size: (p[1] || 'full').trim(), src: imgMatch[2].trim() }); continue; }
+    if (imgMatch) { flushPara(); flushList(); flushTable(); const p = imgMatch[1].split('|'); blocks.push({ type: 'img', alt: p[0].trim(), size: (p[1] || 'full').trim(), src: imgMatch[2].trim() }); continue; }
     if (/^[-*]\s+/.test(line)) { flushPara(); ordered = []; list.push(line.replace(/^[-*]\s+/, '')); continue; }
     if (/^\d+\.\s+/.test(line)) { flushPara(); list = []; ordered.push(line.replace(/^\d+\.\s+/, '')); continue; }
+    // 水平分割线
+    if (/^---+$/.test(line) || /^\*\*\*+$/.test(line)) { flushPara(); flushList(); flushTable(); continue; }
     para.push(line);
   }
   flushPara();
   flushList();
+  flushTable();
   return blocks;
 }
 
@@ -132,6 +177,22 @@ function renderArticle(blocks) {
     if (b.type === 'ol') {
       const items = b.items.map((x, i) => `<tr><td style="width:42px;vertical-align:top;"><span style="display:inline-block;width:28px;height:28px;line-height:28px;text-align:center;border-radius:10px;background:${c.gold};color:#fffaf0;font-weight:900;">${i + 1}</span></td><td style="padding-bottom:12px;color:${c.text};font-size:15px;line-height:1.8;">${inline(x)}</td></tr>`).join('');
       body.push(`<section style="margin:18px 0;padding:18px;border-radius:18px;background:${c.panel};border:1px solid ${c.line};"><table style="width:100%;border-collapse:collapse;">${items}</table></section>`);
+    }
+    if (b.type === 'table') {
+      const headerRow = b.rows.find(r => r.isHeader);
+      const dataRows = b.rows.filter(r => !r.isHeader);
+      let thead = '';
+      if (headerRow) {
+        const ths = headerRow.cells.map(cell => `<th style="padding:10px 12px;background:${c.gold};color:#fff;font-size:13px;font-weight:800;text-align:left;white-space:nowrap;">${inline(cell)}</th>`).join('');
+        thead = `<thead><tr>${ths}</tr></thead>`;
+      }
+      const tbody = dataRows.map((row, ri) => {
+        const bg = ri % 2 === 0 ? c.bg : c.panel;
+        const tds = row.cells.map(cell => `<td style="padding:10px 12px;border-bottom:1px solid ${c.line};color:${c.text};font-size:14px;line-height:1.7;background:${bg};">${inline(cell)}</td>`).join('');
+        return `<tr>${tds}</tr>`;
+      }).join('');
+      body.push(`<section style="margin:18px 0;border-radius:16px;overflow:hidden;border:1px solid ${c.line};"><table style="width:100%;border-collapse:collapse;">${thead}<tbody>${tbody}</tbody></table></section>`);
+      return;
     }
     if (b.type === 'img') {
       const imgSrc = resolveImage(b.src);

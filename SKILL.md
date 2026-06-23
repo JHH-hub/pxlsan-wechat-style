@@ -36,6 +36,18 @@ cd "<skillDir>" ; & node scripts/render.cjs "<markdown-file>"
    - `output/article-copy.html`：公众号正文 HTML
    - `output/article.md`：文章 Markdown
 
+## 表格支持
+
+标准 Markdown 表格语法，表头行下方跟分隔线（`|---|---|`）即可自动识别：
+
+```markdown
+| 列1 | 列2 | 列3 |
+|---|---|---|
+| 内容 | 内容 | 内容 |
+```
+
+渲染效果：表头深色背景（品牌蓝），数据行斑马纹，圆角外框，公众号内联样式。
+
 ## 图片插入
 
 支持 4 种图片样式，语法为 `![描述|样式](图片链接)`：
