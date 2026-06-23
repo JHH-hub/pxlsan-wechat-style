@@ -1,0 +1,1 @@
+﻿{"name":"pxlsan-wechat-style","version":"0.1.0","description":"Pxlsan branded WeChat article HTML renderer","type":"commonjs","scripts":{"render":"node scripts/render.cjs","demo":"node scripts/render.cjs examples/pxark-article.md"},"license":"UNLICENSED","engines":{"node":">=18"}}
