@@ -1,7 +1,11 @@
 ---
 name: pxlsan-wechat-style
 cn_name: 像素离散公众号排版
-description: 将 Markdown、项目 README、产品介绍转换为 Pxlsan 像素离散品牌风格的公众号文章 HTML；当用户要求“公众号排版”“Pxlsan 风格排版”“生成公众号预览”“把项目写成公众号文章”“做成可复制到公众号的 HTML”时使用。MVP 版不接公众号 API，不推送草稿箱，只生成本地预览与可复制 HTML。
+description: 将 Markdown、项目 README、产品介绍转换为 Pxlsan 像素离散品牌风格的公众号文章 HTML；当用户要求"公众号排版""Pxlsan 风格排版""生成公众号预览""把项目写成公众号文章""做成可复制到公众号的 HTML"时使用。MVP 版不接公众号 API，不推送草稿箱，只生成本地预览与可复制 HTML。
+description_zh: 像素离散公众号排版
+description_en: Pxlsan WeChat Article Renderer
+disable: false
+agent_created: true
 version: 0.1.0
 ---
 
@@ -31,6 +35,24 @@ cd "<skillDir>" ; & node scripts/render.cjs "<markdown-file>"
    - `output/article.html`：本地预览页
    - `output/article-copy.html`：公众号正文 HTML
    - `output/article.md`：文章 Markdown
+
+## 图片插入
+
+支持 4 种图片样式，语法为 `![描述|样式](图片链接)`：
+
+| 样式 | 语法 | 效果 |
+|------|------|------|
+| `full`（默认） | `![描述](url)` | 完整宽度，圆角边框 + 阴影，带说明文字 |
+| `banner` | `![描述\|banner](url)` | 通栏横幅，无圆角无边框，适合文章顶部 |
+| `card` | `![描述\|card](url)` | 卡片包裹，带内边距、背景色和边框 |
+| `small` | `![描述\|small](url)` | 居中小图，最大宽度 75%，适合截图对比 |
+
+使用规则：
+
+- **在线图片**：直接使用 URL（`http://` / `https://` 开头），预览和公众号均可用
+- **本地图片**：填写相对路径，脚本自动转 base64 嵌入；粘贴到公众号时需确认图片是否正常显示
+- **说明文字**：alt 文本自动渲染为图片下方居中说明，留空 `![](url)` 则不显示
+- 图片必须独占一行，不支持行内图片
 
 ## 风格原则
 

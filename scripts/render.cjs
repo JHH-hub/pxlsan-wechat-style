@@ -36,6 +36,17 @@ function inline(text) {
   return s;
 }
 
+function resolveImage(src) {
+  if (/^https?:\/\//.test(src)) return src;
+  const localPath = path.resolve(process.cwd(), src);
+  if (fs.existsSync(localPath)) {
+    const ext = path.extname(localPath).toLowerCase();
+    const mime = ext === '.png' ? 'image/png' : ext === '.webp' ? 'image/webp' : ext === '.gif' ? 'image/gif' : 'image/jpeg';
+    return `data:${mime};base64,${fs.readFileSync(localPath).toString('base64')}`;
+  }
+  return src;
+}
+
 function parseMarkdown(source) {
   const lines = source.replace(/\r\n/g, '\n').split('\n');
   const blocks = [];
@@ -65,6 +76,8 @@ function parseMarkdown(source) {
     if (/^##\s+/.test(line)) { flushPara(); flushList(); blocks.push({ type: 'h2', text: line.replace(/^##\s+/, '') }); continue; }
     if (/^###\s+/.test(line)) { flushPara(); flushList(); blocks.push({ type: 'h3', text: line.replace(/^###\s+/, '') }); continue; }
     if (/^>\s?/.test(line)) { flushPara(); flushList(); blocks.push({ type: 'quote', text: line.replace(/^>\s?/, '') }); continue; }
+    const imgMatch = line.match(/^!\[([^\]]*)\]\(([^)]+)\)$/);
+    if (imgMatch) { flushPara(); flushList(); const p = imgMatch[1].split('|'); blocks.push({ type: 'img', alt: p[0].trim(), size: (p[1] || 'full').trim(), src: imgMatch[2].trim() }); continue; }
     if (/^[-*]\s+/.test(line)) { flushPara(); ordered = []; list.push(line.replace(/^[-*]\s+/, '')); continue; }
     if (/^\d+\.\s+/.test(line)) { flushPara(); list = []; ordered.push(line.replace(/^\d+\.\s+/, '')); continue; }
     para.push(line);
@@ -119,6 +132,20 @@ function renderArticle(blocks) {
     if (b.type === 'ol') {
       const items = b.items.map((x, i) => `<tr><td style="width:42px;vertical-align:top;"><span style="display:inline-block;width:28px;height:28px;line-height:28px;text-align:center;border-radius:10px;background:${c.gold};color:#fffaf0;font-weight:900;">${i + 1}</span></td><td style="padding-bottom:12px;color:${c.text};font-size:15px;line-height:1.8;">${inline(x)}</td></tr>`).join('');
       body.push(`<section style="margin:18px 0;padding:18px;border-radius:18px;background:${c.panel};border:1px solid ${c.line};"><table style="width:100%;border-collapse:collapse;">${items}</table></section>`);
+    }
+    if (b.type === 'img') {
+      const imgSrc = resolveImage(b.src);
+      const cap = b.alt ? `\n<p style="margin:10px 0 0;color:${c.muted};font-size:13px;line-height:1.6;text-align:center;letter-spacing:.3px;">${inline(b.alt)}</p>` : '';
+      if (b.size === 'banner') {
+        body.push(`<section style="margin:20px 0 0;padding:0;">\n<img src="${imgSrc}" alt="${escapeHtml(b.alt)}" style="width:100%;display:block;border:0;vertical-align:top;" />${cap}\n</section>`);
+      } else if (b.size === 'card') {
+        body.push(`<section style="margin:18px 0;padding:10px;border-radius:18px;background:${c.panel};border:1px solid ${c.line};box-shadow:0 4px 16px rgba(37,99,235,.08);">\n<img src="${imgSrc}" alt="${escapeHtml(b.alt)}" style="width:100%;display:block;border-radius:12px;" />${cap}\n</section>`);
+      } else if (b.size === 'small') {
+        body.push(`<section style="margin:18px 0;text-align:center;">\n<img src="${imgSrc}" alt="${escapeHtml(b.alt)}" style="max-width:75%;border-radius:14px;border:1px solid ${c.line};box-shadow:0 4px 16px rgba(37,99,235,.10);" />${cap}\n</section>`);
+      } else {
+        body.push(`<section style="margin:18px 0;padding:0;">\n<img src="${imgSrc}" alt="${escapeHtml(b.alt)}" style="width:100%;display:block;border-radius:16px;border:1px solid ${c.line};box-shadow:0 4px 16px rgba(37,99,235,.08);" />${cap}\n</section>`);
+      }
+      return;
     }
   });
 
