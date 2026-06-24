@@ -30,8 +30,21 @@ function escapeHtml(str) {
 }
 
 function inline(text) {
+  // 接受已 escape 或未 escape 的文本；统一先 escape
   let s = escapeHtml(text);
   s = s.replace(/\*\*(.+?)\*\*/g, '<strong style="color:#2563EB;font-weight:800;">$1</strong>');
+  s = s.replace(/\*(.+?)\*/g, '<em style="color:#7C3AED;font-style:italic;">$1</em>');
+  s = s.replace(/~~(.+?)~~/g, '<del style="color:#94A3B8;text-decoration:line-through;">$1</del>');
+  s = s.replace(/`(.+?)`/g, '<code style="background:#EEF2FF;color:#2563EB;padding:2px 6px;border-radius:6px;font-size:13px;border:1px solid #DBEAFE;">$1</code>');
+  return s;
+}
+
+// 仅用于已经 escape 过的上下文（如图片 alt），避免二次 escape
+function inlineRaw(text) {
+  let s = text;
+  s = s.replace(/\*\*(.+?)\*\*/g, '<strong style="color:#2563EB;font-weight:800;">$1</strong>');
+  s = s.replace(/\*(.+?)\*/g, '<em style="color:#7C3AED;font-style:italic;">$1</em>');
+  s = s.replace(/~~(.+?)~~/g, '<del style="color:#94A3B8;text-decoration:line-through;">$1</del>');
   s = s.replace(/`(.+?)`/g, '<code style="background:#EEF2FF;color:#2563EB;padding:2px 6px;border-radius:6px;font-size:13px;border:1px solid #DBEAFE;">$1</code>');
   return s;
 }
@@ -63,6 +76,7 @@ function parseMarkdown(source) {
   let para = [];
   let tableRows = [];
   let tableHasHeader = false;
+  let fenceCode = null; // { lang, lines[] }
 
   function flushPara() {
     if (para.length) {
@@ -85,26 +99,40 @@ function parseMarkdown(source) {
     const raw = lines[i];
     const line = raw.trim();
 
+    // ── 代码块（fenced）──
+    if (fenceCode !== null) {
+      if (/^```/.test(line)) {
+        // 结束代码块
+        blocks.push({ type: 'code', lang: fenceCode.lang, text: fenceCode.lines.join('\n') });
+        fenceCode = null;
+      } else {
+        fenceCode.lines.push(raw); // 保留原始缩进
+      }
+      continue;
+    }
+    const fenceOpen = line.match(/^```(\w*)$/);
+    if (fenceOpen) {
+      flushPara(); flushList(); flushTable();
+      fenceCode = { lang: fenceOpen[1] || '', lines: [] };
+      continue;
+    }
+
     // 表格检测：当前行是 | 开头，下一行是分隔线
     if (/^\|/.test(line)) {
       const nextLine = (lines[i + 1] || '').trim();
       if (tableRows.length === 0 && isTableSep(nextLine)) {
-        // 这是表头行
         flushPara(); flushList();
         tableRows.push({ cells: parseTableRow(line), isHeader: true });
         tableHasHeader = true;
-        i++; // 跳过分隔线
+        i++;
         continue;
       } else if (tableRows.length > 0) {
-        // 已在表格中，继续收集行
         tableRows.push({ cells: parseTableRow(line), isHeader: false });
         continue;
       } else if (isTableSep(line)) {
-        // 纯分隔线，跳过
         continue;
       }
     } else if (tableRows.length > 0) {
-      // 不是表格行了，flush 表格
       flushTable();
     }
 
@@ -122,7 +150,6 @@ function parseMarkdown(source) {
     if (imgMatch) { flushPara(); flushList(); flushTable(); const p = imgMatch[1].split('|'); blocks.push({ type: 'img', alt: p[0].trim(), size: (p[1] || 'full').trim(), src: imgMatch[2].trim() }); continue; }
     if (/^[-*]\s+/.test(line)) { flushPara(); ordered = []; list.push(line.replace(/^[-*]\s+/, '')); continue; }
     if (/^\d+\.\s+/.test(line)) { flushPara(); list = []; ordered.push(line.replace(/^\d+\.\s+/, '')); continue; }
-    // 水平分割线
     if (/^---+$/.test(line) || /^\*\*\*+$/.test(line)) { flushPara(); flushList(); flushTable(); continue; }
     para.push(line);
   }
@@ -149,20 +176,20 @@ function renderArticle(blocks) {
       return;
     }
     if (b.type === 'quote') {
-      body.push(`<blockquote style="margin:18px 0;padding:18px 18px 18px 20px;border-left:5px solid ${c.gold};border-radius:16px;background:linear-gradient(90deg,#EEF2FF,#FDF2F8);color:${c.goldSoft};font-size:15px;line-height:1.9;font-weight:600;">${inline(b.text)}</blockquote>`);
+      body.push(`<blockquote style="margin:18px 0;padding:18px 18px 18px 20px;border-left:5px solid ${c.blue};border-radius:16px;background:linear-gradient(90deg,#EEF2FF,#FDF2F8);color:${c.purple};font-size:15px;line-height:1.9;font-weight:600;">${inline(b.text)}</blockquote>`);
       return;
     }
     if (b.type === 'h2') {
       const tag = firstH2 ? 'START' : 'SECTION';
       firstH2 = false;
       body.push(`<section style="margin:30px 0 14px;">
-  <p style="margin:0 0 6px;color:${c.cyan};font-size:12px;letter-spacing:2px;font-weight:800;">${tag}</p>
+  <p style="margin:0 0 6px;color:${c.pink};font-size:12px;letter-spacing:2px;font-weight:800;">${tag}</p>
   <h2 style="margin:0;padding:0 0 10px;border-bottom:2px solid ${c.line};color:${c.text};font-size:22px;line-height:1.4;font-weight:900;">${inline(b.text)}</h2>
 </section>`);
       return;
     }
     if (b.type === 'h3') {
-      body.push(`<h3 style="margin:24px 0 12px;padding:12px 14px;border-radius:14px;background:${c.panel2};border:1px solid ${c.line};color:${c.gold};font-size:18px;line-height:1.5;font-weight:800;">✦ ${inline(b.text)}</h3>`);
+      body.push(`<h3 style="margin:24px 0 12px;padding:12px 14px;border-radius:14px;background:${c.panel2};border:1px solid ${c.line};color:${c.blue};font-size:18px;line-height:1.5;font-weight:800;">✦ ${inline(b.text)}</h3>`);
       return;
     }
     if (b.type === 'p') {
@@ -170,12 +197,12 @@ function renderArticle(blocks) {
       return;
     }
     if (b.type === 'ul') {
-      const items = b.items.map((x) => `<li style="margin:9px 0;color:${c.text};font-size:15px;line-height:1.8;"><span style="color:${c.gold};font-weight:900;">◆</span> ${inline(x)}</li>`).join('');
+      const items = b.items.map((x) => `<li style="margin:9px 0;color:${c.text};font-size:15px;line-height:1.8;"><span style="color:${c.blue};font-weight:900;">◆</span> ${inline(x)}</li>`).join('');
       body.push(`<section style="margin:18px 0;padding:16px 18px;border-radius:18px;background:${c.panel};border:1px solid ${c.line};"><ul style="margin:0;padding:0;list-style:none;">${items}</ul></section>`);
       return;
     }
     if (b.type === 'ol') {
-      const items = b.items.map((x, i) => `<tr><td style="width:42px;vertical-align:top;"><span style="display:inline-block;width:28px;height:28px;line-height:28px;text-align:center;border-radius:10px;background:${c.gold};color:#fffaf0;font-weight:900;">${i + 1}</span></td><td style="padding-bottom:12px;color:${c.text};font-size:15px;line-height:1.8;">${inline(x)}</td></tr>`).join('');
+      const items = b.items.map((x, i) => `<tr><td style="width:42px;vertical-align:top;"><span style="display:inline-block;width:28px;height:28px;line-height:28px;text-align:center;border-radius:10px;background:${c.blue};color:#fffaf0;font-weight:900;">${i + 1}</span></td><td style="padding-bottom:12px;color:${c.text};font-size:15px;line-height:1.8;">${inline(x)}</td></tr>`).join('');
       body.push(`<section style="margin:18px 0;padding:18px;border-radius:18px;background:${c.panel};border:1px solid ${c.line};"><table style="width:100%;border-collapse:collapse;">${items}</table></section>`);
     }
     if (b.type === 'table') {
@@ -183,7 +210,7 @@ function renderArticle(blocks) {
       const dataRows = b.rows.filter(r => !r.isHeader);
       let thead = '';
       if (headerRow) {
-        const ths = headerRow.cells.map(cell => `<th style="padding:10px 12px;background:${c.gold};color:#fff;font-size:13px;font-weight:800;text-align:left;white-space:nowrap;">${inline(cell)}</th>`).join('');
+        const ths = headerRow.cells.map(cell => `<th style="padding:10px 12px;background:${c.blue};color:#fff;font-size:13px;font-weight:800;text-align:left;white-space:nowrap;">${inline(cell)}</th>`).join('');
         thead = `<thead><tr>${ths}</tr></thead>`;
       }
       const tbody = dataRows.map((row, ri) => {
@@ -194,25 +221,39 @@ function renderArticle(blocks) {
       body.push(`<section style="margin:18px 0;border-radius:16px;overflow:hidden;border:1px solid ${c.line};"><table style="width:100%;border-collapse:collapse;">${thead}<tbody>${tbody}</tbody></table></section>`);
       return;
     }
+    if (b.type === 'code') {
+      const langLabel = b.lang ? `<span style="color:#93C5FD;font-size:11px;font-weight:700;letter-spacing:1px;text-transform:uppercase;">${escapeHtml(b.lang)}</span>` : '';
+      const codeLines = b.text.split('\n').map(l => `<span style="display:block;min-height:1.4em;">${escapeHtml(l)}</span>`).join('');
+      body.push(`<section style="margin:18px 0;border-radius:16px;overflow:hidden;border:1px solid #1E3A5F;background:#0F172A;">
+  <div style="padding:10px 16px 8px;border-bottom:1px solid #1E3A5F;display:flex;align-items:center;justify-content:space-between;">
+    <div style="display:flex;gap:6px;"><span style="width:10px;height:10px;border-radius:50%;background:#FF5F56;display:inline-block;"></span><span style="width:10px;height:10px;border-radius:50%;background:#FFBD2E;display:inline-block;"></span><span style="width:10px;height:10px;border-radius:50%;background:#27C93F;display:inline-block;"></span></div>
+    ${langLabel}
+  </div>
+  <pre style="margin:0;padding:16px;overflow-x:auto;"><code style="font-family:'Fira Code','Cascadia Code','Courier New',monospace;font-size:13px;line-height:1.7;color:#E2E8F0;white-space:pre;">${codeLines}</code></pre>
+</section>`);
+      return;
+    }
     if (b.type === 'img') {
       const imgSrc = resolveImage(b.src);
-      const cap = b.alt ? `\n<p style="margin:10px 0 0;color:${c.muted};font-size:13px;line-height:1.6;text-align:center;letter-spacing:.3px;">${inline(b.alt)}</p>` : '';
+      // 使用 inlineRaw 避免 alt 被二次 escape
+      const altEscaped = escapeHtml(b.alt);
+      const cap = b.alt ? `\n<p style="margin:10px 0 0;color:${c.muted};font-size:13px;line-height:1.6;text-align:center;letter-spacing:.3px;">${inlineRaw(altEscaped)}</p>` : '';
       if (b.size === 'banner') {
-        body.push(`<section style="margin:20px 0 0;padding:0;">\n<img src="${imgSrc}" alt="${escapeHtml(b.alt)}" style="width:100%;display:block;border:0;vertical-align:top;" />${cap}\n</section>`);
+        body.push(`<section style="margin:20px 0 0;padding:0;">\n<img src="${imgSrc}" alt="${altEscaped}" style="width:100%;display:block;border:0;vertical-align:top;" />${cap}\n</section>`);
       } else if (b.size === 'card') {
-        body.push(`<section style="margin:18px 0;padding:10px;border-radius:18px;background:${c.panel};border:1px solid ${c.line};box-shadow:0 4px 16px rgba(37,99,235,.08);">\n<img src="${imgSrc}" alt="${escapeHtml(b.alt)}" style="width:100%;display:block;border-radius:12px;" />${cap}\n</section>`);
+        body.push(`<section style="margin:18px 0;padding:10px;border-radius:18px;background:${c.panel};border:1px solid ${c.line};box-shadow:0 4px 16px rgba(37,99,235,.08);">\n<img src="${imgSrc}" alt="${altEscaped}" style="width:100%;display:block;border-radius:12px;" />${cap}\n</section>`);
       } else if (b.size === 'small') {
-        body.push(`<section style="margin:18px 0;text-align:center;">\n<img src="${imgSrc}" alt="${escapeHtml(b.alt)}" style="max-width:75%;border-radius:14px;border:1px solid ${c.line};box-shadow:0 4px 16px rgba(37,99,235,.10);" />${cap}\n</section>`);
+        body.push(`<section style="margin:18px 0;text-align:center;">\n<img src="${imgSrc}" alt="${altEscaped}" style="max-width:75%;border-radius:14px;border:1px solid ${c.line};box-shadow:0 4px 16px rgba(37,99,235,.10);" />${cap}\n</section>`);
       } else {
-        body.push(`<section style="margin:18px 0;padding:0;">\n<img src="${imgSrc}" alt="${escapeHtml(b.alt)}" style="width:100%;display:block;border-radius:16px;border:1px solid ${c.line};box-shadow:0 4px 16px rgba(37,99,235,.08);" />${cap}\n</section>`);
+        body.push(`<section style="margin:18px 0;padding:0;">\n<img src="${imgSrc}" alt="${altEscaped}" style="width:100%;display:block;border-radius:16px;border:1px solid ${c.line};box-shadow:0 4px 16px rgba(37,99,235,.08);" />${cap}\n</section>`);
       }
       return;
     }
   });
 
-  body.push(`<section style="margin:34px 0 0;padding:22px 20px;border-radius:22px;background:linear-gradient(135deg,#EEF2FF,#FDF2F8);border:1px solid #DBEAFE;text-align:center;">
-  <p style="margin:0;color:${c.gold};font-size:18px;font-weight:900;">Pxlsan · 像素离散</p>
-  <p style="margin:8px 0 0;color:${c.text};font-size:14px;line-height:1.8;">以像素为笔，写离散的梦</p>
+  body.push(`<section style="margin:34px 0 0;padding:22px 20px;border-radius:22px;background:linear-gradient(135deg,#111827 0%,#312E81 60%,#EC4899 100%);border:1px solid rgba(255,255,255,.14);text-align:center;">
+  <p style="margin:0;color:#FBBF24;font-size:18px;font-weight:900;letter-spacing:.5px;">Pxlsan · 像素离散</p>
+  <p style="margin:8px 0 0;color:#E5E7EB;font-size:14px;line-height:1.8;">以像素为笔，写离散的梦</p>
 </section>`);
 
   return { title, html: body.join('\n') };

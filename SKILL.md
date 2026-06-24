@@ -36,6 +36,32 @@ cd "<skillDir>" ; & node scripts/render.cjs "<markdown-file>"
    - `output/article-copy.html`：公众号正文 HTML
    - `output/article.md`：文章 Markdown
 
+## 代码块支持
+
+标准 fenced code block，支持语言标注（可选）：
+
+````markdown
+```javascript
+const x = 'hello';
+console.log(x);
+```
+
+```
+无语言标注也可以
+```
+````
+
+渲染效果：深色终端风格（`#0F172A` 背景），顶部红黄绿三点装饰 + 语言标注，等宽字体，保留缩进。
+
+## 行内格式支持
+
+| 语法 | 效果 |
+|------|------|
+| `**粗体**` | **蓝色加粗** |
+| `*斜体*` | *紫色斜体* |
+| `~~删除线~~` | ~~灰色删除线~~ |
+| `` `代码` `` | 蓝色内联代码 |
+
 ## 表格支持
 
 标准 Markdown 表格语法，表头行下方跟分隔线（`|---|---|`）即可自动识别：
