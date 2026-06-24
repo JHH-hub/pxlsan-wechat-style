@@ -2,11 +2,18 @@ const fs = require('fs');
 const path = require('path');
 
 const root = path.resolve(__dirname, '..');
-const input = process.argv[2];
-const outDir = path.resolve(root, 'output');
+
+// ── CLI 参数解析 ──────────────────────────────────────────────
+const args = process.argv.slice(2);
+let input = null;
+let outDirOverride = null;
+for (let i = 0; i < args.length; i++) {
+  if (args[i] === '--out' && args[i + 1]) { outDirOverride = args[++i]; }
+  else if (!args[i].startsWith('--')) { input = args[i]; }
+}
 
 if (!input) {
-  console.error('Usage: node scripts/render.cjs <article.md>');
+  console.error('Usage: node scripts/render.cjs <article.md> [--out <dir>]');
   process.exit(1);
 }
 
@@ -16,10 +23,32 @@ if (!fs.existsSync(mdPath)) {
   process.exit(1);
 }
 
+const outDir = outDirOverride
+  ? path.resolve(process.cwd(), outDirOverride)
+  : path.resolve(root, 'output');
+
 const tokens = JSON.parse(fs.readFileSync(path.join(root, 'styles', 'tokens.json'), 'utf8').replace(/^\uFEFF/, ''));
-const md = fs.readFileSync(mdPath, 'utf8');
+const rawMd = fs.readFileSync(mdPath, 'utf8');
 fs.mkdirSync(outDir, { recursive: true });
 
+// ── Frontmatter 解析 ─────────────────────────────────────────
+function parseFrontmatter(source) {
+  const fm = {};
+  let body = source;
+  const match = source.match(/^---\r?\n([\s\S]*?)\r?\n---\r?\n([\s\S]*)$/);
+  if (match) {
+    match[1].split('\n').forEach(line => {
+      const kv = line.match(/^(\w+):\s*(.+)$/);
+      if (kv) fm[kv[1].trim()] = kv[2].trim();
+    });
+    body = match[2];
+  }
+  return { fm, body };
+}
+
+const { fm, body: md } = parseFrontmatter(rawMd);
+
+// ── HTML 工具函数 ─────────────────────────────────────────────
 function escapeHtml(str) {
   return String(str)
     .replace(/&/g, '&amp;')
@@ -30,7 +59,6 @@ function escapeHtml(str) {
 }
 
 function inline(text) {
-  // 接受已 escape 或未 escape 的文本；统一先 escape
   let s = escapeHtml(text);
   s = s.replace(/\*\*(.+?)\*\*/g, '<strong style="color:#2563EB;font-weight:800;">$1</strong>');
   s = s.replace(/\*(.+?)\*/g, '<em style="color:#7C3AED;font-style:italic;">$1</em>');
@@ -39,7 +67,6 @@ function inline(text) {
   return s;
 }
 
-// 仅用于已经 escape 过的上下文（如图片 alt），避免二次 escape
 function inlineRaw(text) {
   let s = text;
   s = s.replace(/\*\*(.+?)\*\*/g, '<strong style="color:#2563EB;font-weight:800;">$1</strong>');
@@ -60,6 +87,7 @@ function resolveImage(src) {
   return src;
 }
 
+// ── 表格工具 ─────────────────────────────────────────────────
 function parseTableRow(line) {
   return line.replace(/^\||\|$/g, '').split('|').map(c => c.trim());
 }
@@ -67,6 +95,15 @@ function parseTableRow(line) {
 function isTableSep(line) {
   return /^\|?[\s\-:|]+(\|[\s\-:|]+)*\|?$/.test(line) && line.includes('-');
 }
+
+// ── Markdown 解析 ─────────────────────────────────────────────
+// blockquote callout 类型映射
+const CALLOUT_MAP = {
+  note:    { icon: 'ℹ', bg: '#EFF6FF', border: '#93C5FD', text: '#1D4ED8', label: 'NOTE' },
+  tip:     { icon: '💡', bg: '#F0FDF4', border: '#86EFAC', text: '#15803D', label: 'TIP' },
+  warning: { icon: '⚠', bg: '#FFFBEB', border: '#FCD34D', text: '#92400E', label: 'WARNING' },
+  danger:  { icon: '🚨', bg: '#FFF1F2', border: '#FDA4AF', text: '#9F1239', label: 'DANGER' },
+};
 
 function parseMarkdown(source) {
   const lines = source.replace(/\r\n/g, '\n').split('\n');
@@ -76,13 +113,10 @@ function parseMarkdown(source) {
   let para = [];
   let tableRows = [];
   let tableHasHeader = false;
-  let fenceCode = null; // { lang, lines[] }
+  let fenceCode = null;
 
   function flushPara() {
-    if (para.length) {
-      blocks.push({ type: 'p', text: para.join(' ') });
-      para = [];
-    }
+    if (para.length) { blocks.push({ type: 'p', text: para.join(' ') }); para = []; }
   }
   function flushList() {
     if (list.length) blocks.push({ type: 'ul', items: list.splice(0) });
@@ -99,14 +133,13 @@ function parseMarkdown(source) {
     const raw = lines[i];
     const line = raw.trim();
 
-    // ── 代码块（fenced）──
+    // fenced code block
     if (fenceCode !== null) {
       if (/^```/.test(line)) {
-        // 结束代码块
         blocks.push({ type: 'code', lang: fenceCode.lang, text: fenceCode.lines.join('\n') });
         fenceCode = null;
       } else {
-        fenceCode.lines.push(raw); // 保留原始缩进
+        fenceCode.lines.push(raw);
       }
       continue;
     }
@@ -117,7 +150,7 @@ function parseMarkdown(source) {
       continue;
     }
 
-    // 表格检测：当前行是 | 开头，下一行是分隔线
+    // 表格
     if (/^\|/.test(line)) {
       const nextLine = (lines[i + 1] || '').trim();
       if (tableRows.length === 0 && isTableSep(nextLine)) {
@@ -136,49 +169,83 @@ function parseMarkdown(source) {
       flushTable();
     }
 
-    if (!line) {
-      flushPara();
-      flushList();
-      flushTable();
+    if (!line) { flushPara(); flushList(); flushTable(); continue; }
+
+    if (/^#\s+/.test(line))   { flushPara(); flushList(); flushTable(); blocks.push({ type: 'h1',  text: line.replace(/^#\s+/, '') }); continue; }
+    if (/^##\s+/.test(line))  { flushPara(); flushList(); flushTable(); blocks.push({ type: 'h2',  text: line.replace(/^##\s+/, '') }); continue; }
+    if (/^###\s+/.test(line)) { flushPara(); flushList(); flushTable(); blocks.push({ type: 'h3',  text: line.replace(/^###\s+/, '') }); continue; }
+
+    // blockquote — 支持 > [!note/tip/warning/danger] callout
+    if (/^>\s?/.test(line)) {
+      flushPara(); flushList(); flushTable();
+      const inner = line.replace(/^>\s?/, '');
+      const calloutMatch = inner.match(/^\[!(note|tip|warning|danger)\]\s*(.*)/i);
+      if (calloutMatch) {
+        blocks.push({ type: 'callout', kind: calloutMatch[1].toLowerCase(), text: calloutMatch[2] });
+      } else {
+        blocks.push({ type: 'quote', text: inner });
+      }
       continue;
     }
-    if (/^#\s+/.test(line)) { flushPara(); flushList(); flushTable(); blocks.push({ type: 'h1', text: line.replace(/^#\s+/, '') }); continue; }
-    if (/^##\s+/.test(line)) { flushPara(); flushList(); flushTable(); blocks.push({ type: 'h2', text: line.replace(/^##\s+/, '') }); continue; }
-    if (/^###\s+/.test(line)) { flushPara(); flushList(); flushTable(); blocks.push({ type: 'h3', text: line.replace(/^###\s+/, '') }); continue; }
-    if (/^>\s?/.test(line)) { flushPara(); flushList(); flushTable(); blocks.push({ type: 'quote', text: line.replace(/^>\s?/, '') }); continue; }
+
     const imgMatch = line.match(/^!\[([^\]]*)\]\(([^)]+)\)$/);
     if (imgMatch) { flushPara(); flushList(); flushTable(); const p = imgMatch[1].split('|'); blocks.push({ type: 'img', alt: p[0].trim(), size: (p[1] || 'full').trim(), src: imgMatch[2].trim() }); continue; }
     if (/^[-*]\s+/.test(line)) { flushPara(); ordered = []; list.push(line.replace(/^[-*]\s+/, '')); continue; }
     if (/^\d+\.\s+/.test(line)) { flushPara(); list = []; ordered.push(line.replace(/^\d+\.\s+/, '')); continue; }
-    if (/^---+$/.test(line) || /^\*\*\*+$/.test(line)) { flushPara(); flushList(); flushTable(); continue; }
+
+    // 分割线 → hr block
+    if (/^---+$/.test(line) || /^\*\*\*+$/.test(line)) { flushPara(); flushList(); flushTable(); blocks.push({ type: 'hr' }); continue; }
+
     para.push(line);
   }
-  flushPara();
-  flushList();
-  flushTable();
+  flushPara(); flushList(); flushTable();
   return blocks;
 }
 
-function renderArticle(blocks) {
+// ── 文章渲染 ──────────────────────────────────────────────────
+function renderArticle(blocks, fm) {
   const c = tokens.colors;
   let title = 'Pxlsan Article';
   const body = [];
   let firstH2 = true;
 
   blocks.forEach((b) => {
+    // H1 banner — 支持 frontmatter subtitle / author / date
     if (b.type === 'h1') {
       title = b.text;
+      const subtitle = fm.subtitle || '以像素为笔，写离散的梦';
+      const meta = [fm.author, fm.date].filter(Boolean).join(' · ');
+      const metaHtml = meta ? `<p style="margin:10px 0 0;color:#93C5FD;font-size:12px;letter-spacing:1px;">${escapeHtml(meta)}</p>` : '';
       body.push(`<section style="margin:0 0 26px;padding:30px 24px;border-radius:24px;background:linear-gradient(135deg,#111827 0%,#312E81 58%,#EC4899 100%);border:1px solid rgba(255,255,255,.16);box-shadow:0 18px 44px rgba(37,99,235,.20);">
   <p style="margin:0 0 12px;color:#93C5FD;font-size:13px;letter-spacing:2px;font-weight:900;">PXLSAN · PROJECT NOTE</p>
   <h1 style="margin:0;color:#FFFFFF;font-size:28px;line-height:1.28;font-weight:900;letter-spacing:-.5px;">${inline(b.text)}</h1>
-  <p style="margin:16px 0 0;color:#E5E7EB;font-size:14px;line-height:1.8;">以像素为笔，写离散的梦</p>
+  <p style="margin:16px 0 0;color:#E5E7EB;font-size:14px;line-height:1.8;">${escapeHtml(subtitle)}</p>${metaHtml}
 </section>`);
       return;
     }
+
+    // 分割线
+    if (b.type === 'hr') {
+      body.push(`<section style="margin:28px 0;text-align:center;"><div style="display:inline-block;width:60%;height:1px;background:linear-gradient(90deg,transparent,${c.blue},transparent);opacity:.5;"></div></section>`);
+      return;
+    }
+
+    // blockquote 普通
     if (b.type === 'quote') {
       body.push(`<blockquote style="margin:18px 0;padding:18px 18px 18px 20px;border-left:5px solid ${c.blue};border-radius:16px;background:linear-gradient(90deg,#EEF2FF,#FDF2F8);color:${c.purple};font-size:15px;line-height:1.9;font-weight:600;">${inline(b.text)}</blockquote>`);
       return;
     }
+
+    // blockquote callout
+    if (b.type === 'callout') {
+      const cfg = CALLOUT_MAP[b.kind] || CALLOUT_MAP.note;
+      body.push(`<section style="margin:18px 0;padding:14px 18px;border-radius:16px;background:${cfg.bg};border:1px solid ${cfg.border};border-left:4px solid ${cfg.border};">
+  <p style="margin:0 0 6px;color:${cfg.text};font-size:12px;font-weight:900;letter-spacing:1.5px;">${cfg.icon} ${cfg.label}</p>
+  <p style="margin:0;color:${cfg.text};font-size:14.5px;line-height:1.9;">${inline(b.text)}</p>
+</section>`);
+      return;
+    }
+
     if (b.type === 'h2') {
       const tag = firstH2 ? 'START' : 'SECTION';
       firstH2 = false;
@@ -188,26 +255,36 @@ function renderArticle(blocks) {
 </section>`);
       return;
     }
+
     if (b.type === 'h3') {
       body.push(`<h3 style="margin:24px 0 12px;padding:12px 14px;border-radius:14px;background:${c.panel2};border:1px solid ${c.line};color:${c.blue};font-size:18px;line-height:1.5;font-weight:800;">✦ ${inline(b.text)}</h3>`);
       return;
     }
+
     if (b.type === 'p') {
       body.push(`<p style="margin:14px 0;color:${c.text};font-size:15.5px;line-height:2;letter-spacing:.2px;">${inline(b.text)}</p>`);
       return;
     }
+
     if (b.type === 'ul') {
       const items = b.items.map((x) => `<li style="margin:9px 0;color:${c.text};font-size:15px;line-height:1.8;"><span style="color:${c.blue};font-weight:900;">◆</span> ${inline(x)}</li>`).join('');
       body.push(`<section style="margin:18px 0;padding:16px 18px;border-radius:18px;background:${c.panel};border:1px solid ${c.line};"><ul style="margin:0;padding:0;list-style:none;">${items}</ul></section>`);
       return;
     }
+
+    // 有序列表 — 改用 flexbox，避免 table 在公众号窄屏错位
     if (b.type === 'ol') {
-      const items = b.items.map((x, i) => `<tr><td style="width:42px;vertical-align:top;"><span style="display:inline-block;width:28px;height:28px;line-height:28px;text-align:center;border-radius:10px;background:${c.blue};color:#fffaf0;font-weight:900;">${i + 1}</span></td><td style="padding-bottom:12px;color:${c.text};font-size:15px;line-height:1.8;">${inline(x)}</td></tr>`).join('');
-      body.push(`<section style="margin:18px 0;padding:18px;border-radius:18px;background:${c.panel};border:1px solid ${c.line};"><table style="width:100%;border-collapse:collapse;">${items}</table></section>`);
+      const items = b.items.map((x, i) => `<li style="display:flex;align-items:flex-start;gap:12px;margin:10px 0;">
+    <span style="flex-shrink:0;width:28px;height:28px;line-height:28px;text-align:center;border-radius:10px;background:${c.blue};color:#fffaf0;font-weight:900;font-size:14px;">${i + 1}</span>
+    <span style="flex:1;color:${c.text};font-size:15px;line-height:1.8;padding-top:4px;">${inline(x)}</span>
+  </li>`).join('');
+      body.push(`<section style="margin:18px 0;padding:16px 18px;border-radius:18px;background:${c.panel};border:1px solid ${c.line};"><ul style="margin:0;padding:0;list-style:none;">${items}</ul></section>`);
+      return;
     }
+
     if (b.type === 'table') {
       const headerRow = b.rows.find(r => r.isHeader);
-      const dataRows = b.rows.filter(r => !r.isHeader);
+      const dataRows  = b.rows.filter(r => !r.isHeader);
       let thead = '';
       if (headerRow) {
         const ths = headerRow.cells.map(cell => `<th style="padding:10px 12px;background:${c.blue};color:#fff;font-size:13px;font-weight:800;text-align:left;white-space:nowrap;">${inline(cell)}</th>`).join('');
@@ -221,6 +298,7 @@ function renderArticle(blocks) {
       body.push(`<section style="margin:18px 0;border-radius:16px;overflow:hidden;border:1px solid ${c.line};"><table style="width:100%;border-collapse:collapse;">${thead}<tbody>${tbody}</tbody></table></section>`);
       return;
     }
+
     if (b.type === 'code') {
       const langLabel = b.lang ? `<span style="color:#93C5FD;font-size:11px;font-weight:700;letter-spacing:1px;text-transform:uppercase;">${escapeHtml(b.lang)}</span>` : '';
       const codeLines = b.text.split('\n').map(l => `<span style="display:block;min-height:1.4em;">${escapeHtml(l)}</span>`).join('');
@@ -233,9 +311,9 @@ function renderArticle(blocks) {
 </section>`);
       return;
     }
+
     if (b.type === 'img') {
       const imgSrc = resolveImage(b.src);
-      // 使用 inlineRaw 避免 alt 被二次 escape
       const altEscaped = escapeHtml(b.alt);
       const cap = b.alt ? `\n<p style="margin:10px 0 0;color:${c.muted};font-size:13px;line-height:1.6;text-align:center;letter-spacing:.3px;">${inlineRaw(altEscaped)}</p>` : '';
       if (b.size === 'banner') {
@@ -259,8 +337,9 @@ function renderArticle(blocks) {
   return { title, html: body.join('\n') };
 }
 
+// ── 输出 ──────────────────────────────────────────────────────
 const blocks = parseMarkdown(md);
-const { title, html } = renderArticle(blocks);
+const { title, html } = renderArticle(blocks, fm);
 const c = tokens.colors;
 const copyHtml = `<section style="max-width:${tokens.wechatWidth};margin:0 auto;padding:20px 14px;background:${c.bg};font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Microsoft YaHei',sans-serif;box-sizing:border-box;">
 ${html}
@@ -313,5 +392,5 @@ async function copyArticle(){
 
 fs.writeFileSync(path.join(outDir, 'article.html'), previewHtml, 'utf8');
 fs.writeFileSync(path.join(outDir, 'article-copy.html'), copyHtml, 'utf8');
-fs.writeFileSync(path.join(outDir, 'article.md'), md, 'utf8');
+fs.writeFileSync(path.join(outDir, 'article.md'), rawMd, 'utf8');
 console.log(JSON.stringify({ success: true, title, preview: path.join(outDir, 'article.html'), copy: path.join(outDir, 'article-copy.html') }, null, 2));

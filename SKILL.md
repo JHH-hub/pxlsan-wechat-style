@@ -6,7 +6,7 @@ description_zh: 像素离散公众号排版
 description_en: Pxlsan WeChat Article Renderer
 disable: false
 agent_created: true
-version: 0.1.0
+version: 0.2.0
 ---
 
 # 像素离散公众号排版
@@ -24,17 +24,96 @@ version: 0.1.0
 
 1. 获取输入内容：Markdown 文件、README 文件或用户提供的正文。
 2. 如输入是 README，先改写成公众号文章结构：标题、导语、核心亮点、工作流、适用人群、结尾品牌卡。
-3. 将文章保存为 Markdown。
-4. 运行渲染脚本：
+3. （可选）在 Markdown 顶部添加 frontmatter 自定义 banner 信息：
 
-```powershell
-cd "<skillDir>" ; & node scripts/render.cjs "<markdown-file>"
+```markdown
+---
+subtitle: 用一句话说清楚这篇文章是什么
+author: 作者名
+date: 2026-06-24
+---
 ```
 
-5. 输出：
-   - `output/article.html`：本地预览页
-   - `output/article-copy.html`：公众号正文 HTML
-   - `output/article.md`：文章 Markdown
+4. 将文章保存为 Markdown。
+5. 运行渲染脚本：
+
+```powershell
+# 输出到默认 output/ 目录
+cd "<skillDir>" ; & node scripts/render.cjs "<markdown-file>"
+
+# 输出到自定义目录（--out 参数）
+cd "<skillDir>" ; & node scripts/render.cjs "<markdown-file>" --out "<output-dir>"
+```
+
+6. 输出：
+   - `article.html`：本地预览页（含"复制到公众号编辑器"按钮）
+   - `article-copy.html`：公众号正文 HTML
+   - `article.md`：原始 Markdown 备份
+
+## 完整 AI 工作流示例
+
+当用户说"帮我把这个 README 写成公众号文章"时，AI 应该：
+
+**Step 1 — 改写文章**（AI 完成）
+
+根据 README 内容起草公众号文章，结构如下：
+- `# 标题` — 吸引人，不超过 20 字
+- 导语段落（1-2 段，点出核心价值）
+- `## 它能做什么` — 核心功能，用无序列表
+- `## 怎么用` — 步骤，用有序列表 + 代码块
+- `## 适合谁` — 目标用户
+- `## 写在最后` — 品牌收尾
+
+**Step 2 — 保存 Markdown**（AI 完成）
+
+将文章写入 `<skillDir>/output/article.md`（或用户指定路径）。
+
+**Step 3 — 渲染**（AI 执行命令）
+
+```powershell
+cd "<skillDir>" ; & node scripts/render.cjs output/article.md
+```
+
+**Step 4 — 告知用户**
+
+渲染完成后告知用户：
+- 预览地址：`output/article.html`（在浏览器打开）
+- 复制方法：打开预览页，点击"复制到公众号编辑器"按钮，粘贴到公众号图文正文区
+
+## Frontmatter 自定义
+
+在 Markdown 文件顶部添加 `---` 块，可自定义 banner 区域：
+
+| 字段 | 说明 | 默认值 |
+|------|------|--------|
+| `subtitle` | banner 副标题 | 以像素为笔，写离散的梦 |
+| `author` | 作者名，显示在 banner 右下角 | 不显示 |
+| `date` | 日期，与 author 合并显示 | 不显示 |
+
+## 分割线
+
+`---`（三个及以上短横线）渲染为品牌色渐变细线，可用于章节间视觉分隔：
+
+```markdown
+上一节内容
+
+---
+
+下一节内容
+```
+
+## Callout 提示框
+
+基于 GitHub Callout 语法，支持 4 种风格：
+
+```markdown
+> [!note] 信息提示（蓝色）
+> [!tip] 技巧提示（绿色）
+> [!warning] 注意警告（黄色）
+> [!danger] 危险操作（红色）
+```
+
+普通 `> 引用` 保持原有蓝紫渐变风格不变。
 
 ## 代码块支持
 
