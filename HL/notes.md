@@ -4,12 +4,13 @@
 
 ## Current Best
 
-- round: `001-baseline`
-- skill-commit: `75371d751bfa`
+- round: `002-token-rename-guard`
+- skill-commit: `9f5107c69ebb`
 
 ## Rounds
 
 - `001-baseline` kind=baseline user-confirmation=accepted
+- `002-token-rename-guard` kind=iter user-confirmation=accepted
 
 ## Criteria History
 
