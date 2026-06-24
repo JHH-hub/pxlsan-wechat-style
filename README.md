@@ -4,7 +4,7 @@
 
 将 Markdown / 项目 README / 产品介绍转换为 Pxlsan 品牌风格的公众号 HTML，支持本地预览和一键复制。
 
-## 当前能力（v0.2.0）
+## 当前能力（v0.3.0）
 
 | 功能 | 说明 |
 |---|---|
@@ -18,6 +18,7 @@
 | 分割线 | `---` 渲染为品牌色渐变细线 |
 | Frontmatter | `subtitle` / `author` / `date` 渲染到 banner |
 | 本地图片 | 自动转 base64 嵌入，无需上传 |
+| 封面图 Prompt | 自动提取标题/导语/关键词，生成即梦/MJ 可用的提示词 |
 | 自定义输出目录 | `--out <dir>` 参数 |
 | 一键复制 | 预览页内置"复制到公众号编辑器"按钮 |
 
@@ -34,9 +35,10 @@
 输出文件：
 
 ```
-article.html       # 本地预览页（含复制按钮）
-article-copy.html  # 公众号正文 HTML
-article.md         # 原始 Markdown 备份
+article.html        # 本地预览页（含复制按钮 + 封面 Prompt 卡片）
+article-copy.html   # 公众号正文 HTML
+article.md          # 原始 Markdown 备份
+cover-prompt.txt    # 封面图提示词（可直接粘贴到即梦 / Midjourney）
 ```
 
 ## Frontmatter

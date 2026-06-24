@@ -6,7 +6,7 @@ description_zh: 像素离散公众号排版
 description_en: Pxlsan WeChat Article Renderer
 disable: false
 agent_created: true
-version: 0.2.0
+version: 0.3.0
 ---
 
 # 像素离散公众号排版
@@ -184,6 +184,19 @@ console.log(x);
 - 卡片化信息：功能点、步骤、亮点都用模块承载
 - 公众号友好：使用内联样式，不依赖外链 CSS，不使用 JS 作为正文能力
 - 克制排版：不做花哨模板堆叠，优先可读性和品牌一致性
+
+## 封面图 Prompt 生成
+
+渲染时自动根据文章标题、导语、章节关键词生成封面图 Prompt，输出到 `cover-prompt.txt`，同时在预览页底部展示，一键复制。
+
+生成内容包含：
+- 比例规格（900×383px 公众号横幅）
+- 文章主题和导语摘要
+- 章节关键词（最多 3 个）
+- Pxlsan 品牌风格描述（深色渐变、金色文字、像素网格纹理）
+- 文字区排版说明
+
+可直接粘贴到**即梦 AI** 或 **Midjourney** 生成封面图。
 
 ## 后续可扩展
 
