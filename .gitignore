@@ -1,5 +1,5 @@
 node_modules/
-output/
 .env
 *.log
 .DS_Store
+.session_tmps/
