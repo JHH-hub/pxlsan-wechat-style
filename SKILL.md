@@ -80,6 +80,12 @@ cd "<skillDir>" ; & node scripts/render.cjs output/article.md
 - 预览地址：`output/article.html`（在浏览器打开）
 - 复制方法：打开预览页，点击"复制到公众号编辑器"按钮，粘贴到公众号图文正文区
 
+## 临时文件规则
+
+- **验证用的临时 `.md`**：写到 BoxAI session temp 目录（`<user_info>` 中的 Session Temporary Directory），不要放进 skill 仓库
+- **`examples/` 目录**：只放有长期参考价值的示例文章，命名清晰（如 `pxark-article.md`、`new-features.md`）
+- **`output/` 目录**：渲染产物，每次运行会覆盖，不要手动编辑
+
 ## Frontmatter 自定义
 
 在 Markdown 文件顶部添加 `---` 块，可自定义 banner 区域：

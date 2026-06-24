@@ -4,13 +4,14 @@
 
 ## Current Best
 
-- round: `002-token-rename-guard`
-- skill-commit: `9f5107c69ebb`
+- round: `003-temp-file-placement`
+- skill-commit: `809f6ffdd866`
 
 ## Rounds
 
 - `001-baseline` kind=baseline user-confirmation=accepted
 - `002-token-rename-guard` kind=iter user-confirmation=accepted
+- `003-temp-file-placement` kind=iter user-confirmation=accepted
 
 ## Criteria History
 
