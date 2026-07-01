@@ -6,7 +6,7 @@ description_zh: 像素离散公众号排版
 description_en: Pxlsan WeChat Article Renderer
 disable: false
 agent_created: true
-version: 0.3.0
+version: 0.4.0
 ---
 
 # 像素离散公众号排版
@@ -24,15 +24,26 @@ version: 0.3.0
 
 1. 获取输入内容：Markdown 文件、README 文件或用户提供的正文。
 2. 如输入是 README，先改写成公众号文章结构：标题、导语、核心亮点、工作流、适用人群、结尾品牌卡。
-3. （可选）在 Markdown 顶部添加 frontmatter 自定义 banner 信息：
+3. （可选）在 Markdown 顶部添加 frontmatter 自定义 banner 信息和文章类目：
 
 ```markdown
 ---
 subtitle: 用一句话说清楚这篇文章是什么
 author: 作者名
 date: 2026-06-24
+type: 教程
 ---
 ```
+
+`type` 字段决定文章风格主题，支持三种值：
+
+| type | 风格 | 适用内容 |
+|------|------|----------|
+| `教程` | 蓝色科技学习风 | AI 绘画教程、工具使用、参数指南 |
+| `平台` | 金紫品牌旗舰风（默认） | 像素离散产品介绍、功能发布 |
+| `作品·美学` | 琥珀自然艺术风 | 构图美学、色彩理论、作品展示 |
+
+不填 `type` 默认使用「平台」风格。
 
 4. 将文章保存为 Markdown。
 5. 运行渲染脚本：
@@ -43,6 +54,9 @@ cd "<skillDir>" ; & node scripts/render.cjs "<markdown-file>"
 
 # 输出到自定义目录（--out 参数）
 cd "<skillDir>" ; & node scripts/render.cjs "<markdown-file>" --out "<output-dir>"
+
+# 指定类目风格（--type 参数，覆盖 frontmatter type）
+cd "<skillDir>" ; & node scripts/render.cjs "<markdown-file>" --type "教程"
 ```
 
 6. 输出：
@@ -95,6 +109,7 @@ cd "<skillDir>" ; & node scripts/render.cjs output/article.md
 | `subtitle` | banner 副标题 | 以像素为笔，写离散的梦 |
 | `author` | 作者名，显示在 banner 右下角 | 不显示 |
 | `date` | 日期，与 author 合并显示 | 不显示 |
+| `type` | 文章类目，决定风格主题（教程/平台/作品·美学） | 平台 |
 
 ## 分割线
 
@@ -179,8 +194,11 @@ console.log(x);
 
 ## 风格原则
 
-- 黑金科技感：深色背景、金色强调、少量蓝紫渐变
-- 像素离散品牌感：结尾固定品牌卡，强调“以像素为笔，写离散的梦”
+- 多主题统一架构：三种类目（教程/平台/作品·美学）共享布局和字号，仅在色彩主调和装饰元素上做差异
+- 教程风：蓝色科技感，`LESSON` 标签，◆ 列表图标
+- 平台风：金紫品牌感，`FEATURE` 标签，★ 列表图标
+- 作品·美学风：琥珀暖调艺术感，`GALLERY` 标签，✦ 列表图标
+- 像素离散品牌感：结尾固定品牌卡，强调”以像素为笔，写离散的梦”
 - 卡片化信息：功能点、步骤、亮点都用模块承载
 - 公众号友好：使用内联样式，不依赖外链 CSS，不使用 JS 作为正文能力
 - 克制排版：不做花哨模板堆叠，优先可读性和品牌一致性

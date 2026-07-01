@@ -7,13 +7,15 @@ const root = path.resolve(__dirname, '..');
 const args = process.argv.slice(2);
 let input = null;
 let outDirOverride = null;
+let typeOverride = null;
 for (let i = 0; i < args.length; i++) {
   if (args[i] === '--out' && args[i + 1]) { outDirOverride = args[++i]; }
+  else if (args[i] === '--type' && args[i + 1]) { typeOverride = args[++i]; }
   else if (!args[i].startsWith('--')) { input = args[i]; }
 }
 
 if (!input) {
-  console.error('Usage: node scripts/render.cjs <article.md> [--out <dir>]');
+  console.error('Usage: node scripts/render.cjs <article.md> [--out <dir>] [--type <教程|平台|作品·美学>]');
   process.exit(1);
 }
 
@@ -31,6 +33,19 @@ const tokens = JSON.parse(fs.readFileSync(path.join(root, 'styles', 'tokens.json
 const rawMd = fs.readFileSync(mdPath, 'utf8');
 fs.mkdirSync(outDir, { recursive: true });
 
+// ── 主题解析（根据 frontmatter type 选择） ────────────────────
+function resolveTheme(fm) {
+  const typeVal = (fm.type || '').replace(/['"]/g, '').trim();
+  if (tokens.themes && tokens.themes[typeVal]) return tokens.themes[typeVal];
+  // fallback: 尝试按 id 匹配
+  if (tokens.themes) {
+    for (const t of Object.values(tokens.themes)) {
+      if (t.id === typeVal) return t;
+    }
+  }
+  return tokens.themes ? tokens.themes[tokens.defaultTheme || '平台'] : null;
+}
+
 // ── Frontmatter 解析 ─────────────────────────────────────────
 function parseFrontmatter(source) {
   const fm = {};
@@ -47,6 +62,7 @@ function parseFrontmatter(source) {
 }
 
 const { fm, body: md } = parseFrontmatter(rawMd);
+if (typeOverride) fm.type = typeOverride;
 
 // ── HTML 工具函数 ─────────────────────────────────────────────
 function escapeHtml(str) {
@@ -58,21 +74,27 @@ function escapeHtml(str) {
     .replace(/'/g, '&#39;');
 }
 
-function inline(text) {
+function inline(text, theme) {
   let s = escapeHtml(text);
-  s = s.replace(/\*\*(.+?)\*\*/g, '<strong style="color:#2563EB;font-weight:800;">$1</strong>');
+  const ac = theme ? theme.accent : '#2563EB';
+  const h3bg = theme ? theme.h3Bg : '#EEF2FF';
+  const h3bd = theme ? theme.h3Border : '#DBEAFE';
+  s = s.replace(/\*\*(.+?)\*\*/g, `<strong style="color:${ac};font-weight:800;">$1</strong>`);
   s = s.replace(/\*(.+?)\*/g, '<em style="color:#7C3AED;font-style:italic;">$1</em>');
   s = s.replace(/~~(.+?)~~/g, '<del style="color:#94A3B8;text-decoration:line-through;">$1</del>');
-  s = s.replace(/`(.+?)`/g, '<code style="background:#EEF2FF;color:#2563EB;padding:2px 6px;border-radius:6px;font-size:13px;border:1px solid #DBEAFE;">$1</code>');
+  s = s.replace(/`(.+?)`/g, `<code style="background:${h3bg};color:${ac};padding:2px 6px;border-radius:6px;font-size:13px;border:1px solid ${h3bd};">$1</code>`);
   return s;
 }
 
-function inlineRaw(text) {
+function inlineRaw(text, theme) {
   let s = text;
-  s = s.replace(/\*\*(.+?)\*\*/g, '<strong style="color:#2563EB;font-weight:800;">$1</strong>');
+  const ac = theme ? theme.accent : '#2563EB';
+  const h3bg = theme ? theme.h3Bg : '#EEF2FF';
+  const h3bd = theme ? theme.h3Border : '#DBEAFE';
+  s = s.replace(/\*\*(.+?)\*\*/g, `<strong style="color:${ac};font-weight:800;">$1</strong>`);
   s = s.replace(/\*(.+?)\*/g, '<em style="color:#7C3AED;font-style:italic;">$1</em>');
   s = s.replace(/~~(.+?)~~/g, '<del style="color:#94A3B8;text-decoration:line-through;">$1</del>');
-  s = s.replace(/`(.+?)`/g, '<code style="background:#EEF2FF;color:#2563EB;padding:2px 6px;border-radius:6px;font-size:13px;border:1px solid #DBEAFE;">$1</code>');
+  s = s.replace(/`(.+?)`/g, `<code style="background:${h3bg};color:${ac};padding:2px 6px;border-radius:6px;font-size:13px;border:1px solid ${h3bd};">$1</code>`);
   return s;
 }
 
@@ -205,6 +227,7 @@ function parseMarkdown(source) {
 // ── 文章渲染 ──────────────────────────────────────────────────
 function renderArticle(blocks, fm) {
   const c = tokens.colors;
+  const theme = resolveTheme(fm);
   let title = 'Pxlsan Article';
   const body = [];
   let firstH2 = true;
@@ -215,10 +238,10 @@ function renderArticle(blocks, fm) {
       title = b.text;
       const subtitle = fm.subtitle || '以像素为笔，写离散的梦';
       const meta = [fm.author, fm.date].filter(Boolean).join(' · ');
-      const metaHtml = meta ? `<p style="margin:10px 0 0;color:#93C5FD;font-size:12px;letter-spacing:1px;">${escapeHtml(meta)}</p>` : '';
-      body.push(`<section style="margin:0 0 26px;padding:30px 24px;border-radius:24px;background:linear-gradient(135deg,#111827 0%,#312E81 58%,#EC4899 100%);border:1px solid rgba(255,255,255,.16);box-shadow:0 18px 44px rgba(37,99,235,.20);">
-  <p style="margin:0 0 12px;color:#93C5FD;font-size:13px;letter-spacing:2px;font-weight:900;">PXLSAN · PROJECT NOTE</p>
-  <h1 style="margin:0;color:#FFFFFF;font-size:28px;line-height:1.28;font-weight:900;letter-spacing:-.5px;">${inline(b.text)}</h1>
+      const metaHtml = meta ? `<p style="margin:10px 0 0;color:${theme.accentLight};font-size:12px;letter-spacing:1px;">${escapeHtml(meta)}</p>` : '';
+      body.push(`<section style="margin:0 0 26px;padding:30px 24px;border-radius:24px;background:${theme.h1Gradient};border:1px solid rgba(255,255,255,.16);box-shadow:0 18px 44px rgba(37,99,235,.20);">
+  <p style="margin:0 0 12px;color:${theme.accentLight};font-size:13px;letter-spacing:2px;font-weight:900;">${theme.bannerLabel}</p>
+  <h1 style="margin:0;color:#FFFFFF;font-size:28px;line-height:1.28;font-weight:900;letter-spacing:-.5px;">${inline(b.text, theme)}</h1>
   <p style="margin:16px 0 0;color:#E5E7EB;font-size:14px;line-height:1.8;">${escapeHtml(subtitle)}</p>${metaHtml}
 </section>`);
       return;
@@ -226,13 +249,13 @@ function renderArticle(blocks, fm) {
 
     // 分割线
     if (b.type === 'hr') {
-      body.push(`<section style="margin:28px 0;text-align:center;"><div style="display:inline-block;width:60%;height:1px;background:linear-gradient(90deg,transparent,${c.blue},transparent);opacity:.5;"></div></section>`);
+      body.push(`<section style="margin:28px 0;text-align:center;"><div style="display:inline-block;width:60%;height:1px;background:${theme.hrGradient};opacity:.5;"></div></section>`);
       return;
     }
 
     // blockquote 普通
     if (b.type === 'quote') {
-      body.push(`<blockquote style="margin:18px 0;padding:18px 18px 18px 20px;border-left:5px solid ${c.blue};border-radius:16px;background:linear-gradient(90deg,#EEF2FF,#FDF2F8);color:${c.purple};font-size:15px;line-height:1.9;font-weight:600;">${inline(b.text)}</blockquote>`);
+      body.push(`<blockquote style="margin:18px 0;padding:18px 18px 18px 20px;border-left:5px solid ${theme.quoteBorder};border-radius:16px;background:${theme.quoteGradient};color:${c.purple};font-size:15px;line-height:1.9;font-weight:600;">${inline(b.text, theme)}</blockquote>`);
       return;
     }
 
@@ -241,33 +264,33 @@ function renderArticle(blocks, fm) {
       const cfg = CALLOUT_MAP[b.kind] || CALLOUT_MAP.note;
       body.push(`<section style="margin:18px 0;padding:14px 18px;border-radius:16px;background:${cfg.bg};border:1px solid ${cfg.border};border-left:4px solid ${cfg.border};">
   <p style="margin:0 0 6px;color:${cfg.text};font-size:12px;font-weight:900;letter-spacing:1.5px;">${cfg.icon} ${cfg.label}</p>
-  <p style="margin:0;color:${cfg.text};font-size:14.5px;line-height:1.9;">${inline(b.text)}</p>
+  <p style="margin:0;color:${cfg.text};font-size:14.5px;line-height:1.9;">${inline(b.text, theme)}</p>
 </section>`);
       return;
     }
 
     if (b.type === 'h2') {
-      const tag = firstH2 ? 'START' : 'SECTION';
+      const tag = firstH2 ? 'START' : theme.h2Tag;
       firstH2 = false;
       body.push(`<section style="margin:30px 0 14px;">
-  <p style="margin:0 0 6px;color:${c.pink};font-size:12px;letter-spacing:2px;font-weight:800;">${tag}</p>
-  <h2 style="margin:0;padding:0 0 10px;border-bottom:2px solid ${c.line};color:${c.text};font-size:22px;line-height:1.4;font-weight:900;">${inline(b.text)}</h2>
+  <p style="margin:0 0 6px;color:${theme.h2TagColor};font-size:12px;letter-spacing:2px;font-weight:800;">${tag}</p>
+  <h2 style="margin:0;padding:0 0 10px;border-bottom:2px solid ${theme.h3Border};color:${c.text};font-size:22px;line-height:1.4;font-weight:900;">${inline(b.text, theme)}</h2>
 </section>`);
       return;
     }
 
     if (b.type === 'h3') {
-      body.push(`<h3 style="margin:24px 0 12px;padding:12px 14px;border-radius:14px;background:${c.panel2};border:1px solid ${c.line};color:${c.blue};font-size:18px;line-height:1.5;font-weight:800;">✦ ${inline(b.text)}</h3>`);
+      body.push(`<h3 style="margin:24px 0 12px;padding:12px 14px;border-radius:14px;background:${theme.h3Bg};border:1px solid ${theme.h3Border};color:${theme.h3TextColor};font-size:18px;line-height:1.5;font-weight:800;">✦ ${inline(b.text, theme)}</h3>`);
       return;
     }
 
     if (b.type === 'p') {
-      body.push(`<p style="margin:14px 0;color:${c.text};font-size:15.5px;line-height:2;letter-spacing:.2px;">${inline(b.text)}</p>`);
+      body.push(`<p style="margin:14px 0;color:${c.text};font-size:15.5px;line-height:2;letter-spacing:.2px;">${inline(b.text, theme)}</p>`);
       return;
     }
 
     if (b.type === 'ul') {
-      const items = b.items.map((x) => `<li style="margin:9px 0;color:${c.text};font-size:15px;line-height:1.8;"><span style="color:${c.blue};font-weight:900;">◆</span> ${inline(x)}</li>`).join('');
+      const items = b.items.map((x) => `<li style="margin:9px 0;color:${c.text};font-size:15px;line-height:1.8;"><span style="color:${theme.accent};font-weight:900;">${theme.listIcon}</span> ${inline(x, theme)}</li>`).join('');
       body.push(`<section style="margin:18px 0;padding:16px 18px;border-radius:18px;background:${c.panel};border:1px solid ${c.line};"><ul style="margin:0;padding:0;list-style:none;">${items}</ul></section>`);
       return;
     }
@@ -275,8 +298,8 @@ function renderArticle(blocks, fm) {
     // 有序列表 — 改用 flexbox，避免 table 在公众号窄屏错位
     if (b.type === 'ol') {
       const items = b.items.map((x, i) => `<li style="display:flex;align-items:flex-start;gap:12px;margin:10px 0;">
-    <span style="flex-shrink:0;width:28px;height:28px;line-height:28px;text-align:center;border-radius:10px;background:${c.blue};color:#fffaf0;font-weight:900;font-size:14px;">${i + 1}</span>
-    <span style="flex:1;color:${c.text};font-size:15px;line-height:1.8;padding-top:4px;">${inline(x)}</span>
+    <span style="flex-shrink:0;width:28px;height:28px;line-height:28px;text-align:center;border-radius:10px;background:${theme.olBadgeBg};color:#fffaf0;font-weight:900;font-size:14px;">${i + 1}</span>
+    <span style="flex:1;color:${c.text};font-size:15px;line-height:1.8;padding-top:4px;">${inline(x, theme)}</span>
   </li>`).join('');
       body.push(`<section style="margin:18px 0;padding:16px 18px;border-radius:18px;background:${c.panel};border:1px solid ${c.line};"><ul style="margin:0;padding:0;list-style:none;">${items}</ul></section>`);
       return;
@@ -287,12 +310,12 @@ function renderArticle(blocks, fm) {
       const dataRows  = b.rows.filter(r => !r.isHeader);
       let thead = '';
       if (headerRow) {
-        const ths = headerRow.cells.map(cell => `<th style="padding:10px 12px;background:${c.blue};color:#fff;font-size:13px;font-weight:800;text-align:left;white-space:nowrap;">${inline(cell)}</th>`).join('');
+        const ths = headerRow.cells.map(cell => `<th style="padding:10px 12px;background:${theme.accent};color:#fff;font-size:13px;font-weight:800;text-align:left;white-space:nowrap;">${inline(cell, theme)}</th>`).join('');
         thead = `<thead><tr>${ths}</tr></thead>`;
       }
       const tbody = dataRows.map((row, ri) => {
         const bg = ri % 2 === 0 ? c.bg : c.panel;
-        const tds = row.cells.map(cell => `<td style="padding:10px 12px;border-bottom:1px solid ${c.line};color:${c.text};font-size:14px;line-height:1.7;background:${bg};">${inline(cell)}</td>`).join('');
+        const tds = row.cells.map(cell => `<td style="padding:10px 12px;border-bottom:1px solid ${c.line};color:${c.text};font-size:14px;line-height:1.7;background:${bg};">${inline(cell, theme)}</td>`).join('');
         return `<tr>${tds}</tr>`;
       }).join('');
       body.push(`<section style="margin:18px 0;border-radius:16px;overflow:hidden;border:1px solid ${c.line};"><table style="width:100%;border-collapse:collapse;">${thead}<tbody>${tbody}</tbody></table></section>`);
@@ -300,7 +323,7 @@ function renderArticle(blocks, fm) {
     }
 
     if (b.type === 'code') {
-      const langLabel = b.lang ? `<span style="color:#93C5FD;font-size:11px;font-weight:700;letter-spacing:1px;text-transform:uppercase;">${escapeHtml(b.lang)}</span>` : '';
+      const langLabel = b.lang ? `<span style="color:${theme.accentLight};font-size:11px;font-weight:700;letter-spacing:1px;text-transform:uppercase;">${escapeHtml(b.lang)}</span>` : '';
       const codeLines = b.text.split('\n').map(l => `<span style="display:block;min-height:1.4em;">${escapeHtml(l)}</span>`).join('');
       body.push(`<section style="margin:18px 0;border-radius:16px;overflow:hidden;border:1px solid #1E3A5F;background:#0F172A;">
   <div style="padding:10px 16px 8px;border-bottom:1px solid #1E3A5F;display:flex;align-items:center;justify-content:space-between;">
@@ -315,7 +338,7 @@ function renderArticle(blocks, fm) {
     if (b.type === 'img') {
       const imgSrc = resolveImage(b.src);
       const altEscaped = escapeHtml(b.alt);
-      const cap = b.alt ? `\n<p style="margin:10px 0 0;color:${c.muted};font-size:13px;line-height:1.6;text-align:center;letter-spacing:.3px;">${inlineRaw(altEscaped)}</p>` : '';
+      const cap = b.alt ? `\n<p style="margin:10px 0 0;color:${c.muted};font-size:13px;line-height:1.6;text-align:center;letter-spacing:.3px;">${inlineRaw(altEscaped, theme)}</p>` : '';
       if (b.size === 'banner') {
         body.push(`<section style="margin:20px 0 0;padding:0;">\n<img src="${imgSrc}" alt="${altEscaped}" style="width:100%;display:block;border:0;vertical-align:top;" />${cap}\n</section>`);
       } else if (b.size === 'card') {
@@ -329,16 +352,17 @@ function renderArticle(blocks, fm) {
     }
   });
 
-  body.push(`<section style="margin:34px 0 0;padding:22px 20px;border-radius:22px;background:linear-gradient(135deg,#111827 0%,#312E81 60%,#EC4899 100%);border:1px solid rgba(255,255,255,.14);text-align:center;">
+  body.push(`<section style="margin:34px 0 0;padding:22px 20px;border-radius:22px;background:${theme.footerGradient};border:1px solid rgba(255,255,255,.14);text-align:center;">
   <p style="margin:0;color:#FBBF24;font-size:18px;font-weight:900;letter-spacing:.5px;">Pxlsan · 像素离散</p>
   <p style="margin:8px 0 0;color:#E5E7EB;font-size:14px;line-height:1.8;">以像素为笔，写离散的梦</p>
 </section>`);
 
-  return { title, html: body.join('\n') };
+  return { title, html: body.join('\n'), theme };
 }
 
 // ── 封面 Prompt 生成 ──────────────────────────────────────────
 function generateCoverPrompt(blocks, fm) {
+  const theme = resolveTheme(fm);
   // 提取标题
   const h1 = blocks.find(b => b.type === 'h1');
   const titleText = h1 ? h1.text : (fm.subtitle || 'Pxlsan');
@@ -363,14 +387,14 @@ function generateCoverPrompt(blocks, fm) {
 
   return `公众号封面图，宽屏横幅比例（900×383px）。
 主题：${subject}。${kwStr}
-风格：像素离散 Pxlsan 品牌，深色科技感背景（深海军蓝 #111827 到深紫 #312E81 渐变），金色标题文字，粉紫色光晕点缀，像素网格纹理叠加，现代简约排版，少量几何装饰元素。
+风格：${theme.coverStyle}。
 文字区：左侧留白放标题"${titleText}"（大号白色粗体），右侧放品牌标识"Pxlsan · 像素离散"（小号金色）。${metaStr}
 画质：超清，适合公众号封面，无水印，无 UI 组件，不含真实照片。`;
 }
 
 
 const blocks = parseMarkdown(md);
-const { title, html } = renderArticle(blocks, fm);
+const { title, html, theme } = renderArticle(blocks, fm);
 const coverPrompt = generateCoverPrompt(blocks, fm);
 const c = tokens.colors;
 const copyHtml = `<section style="max-width:${tokens.wechatWidth};margin:0 auto;padding:20px 14px;background:${c.bg};font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Microsoft YaHei',sans-serif;box-sizing:border-box;">
