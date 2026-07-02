@@ -423,33 +423,15 @@ body{margin:0;background:#f8fafc;color:#1e293b;font-family:-apple-system,BlinkMa
 <textarea class="hidden" id="copy">${escapeHtml(copyHtml)}</textarea>
 <script>
 function copyArticle(){
-  const html = document.getElementById('copy').value;
-  // 创建临时 iframe，写入富文本后全选复制，兼容 file:// 协议
-  const iframe = document.createElement('iframe');
-  iframe.style.cssText = 'position:fixed;left:-9999px;top:-9999px;width:1px;height:1px;opacity:0;border:0';
-  document.body.appendChild(iframe);
-  const doc = iframe.contentDocument || iframe.contentWindow.document;
-  doc.open(); doc.write(html); doc.close();
-  const range = doc.createRange();
-  range.selectNodeContents(doc.body);
-  const sel = iframe.contentWindow.getSelection();
+  const article = document.getElementById('article');
+  const range = document.createRange();
+  range.selectNodeContents(article);
+  const sel = window.getSelection();
   sel.removeAllRanges();
   sel.addRange(range);
-  const ok = doc.execCommand('copy');
-  document.body.removeChild(iframe);
-  if (ok) {
-    alert('已复制富文本，可直接粘贴到公众号图文正文区域');
-  } else {
-    // 最终兜底：选中页面文章区域
-    const art = document.getElementById('article');
-    const r2 = document.createRange();
-    r2.selectNodeContents(art);
-    const s2 = window.getSelection();
-    s2.removeAllRanges(); s2.addRange(r2);
-    document.execCommand('copy');
-    s2.removeAllRanges();
-    alert('已复制富文本，可直接粘贴到公众号图文正文区域');
-  }
+  const ok = document.execCommand('copy');
+  sel.removeAllRanges();
+  alert(ok ? '已复制，请粘贴到公众号图文编辑器正文区域' : '复制失败，请手动全选文章区域后复制');
 }
 async function copyCoverPrompt(){
   const text = document.getElementById('coverPrompt').value;
