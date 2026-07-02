@@ -422,30 +422,34 @@ body{margin:0;background:#f8fafc;color:#1e293b;font-family:-apple-system,BlinkMa
 </div>
 <textarea class="hidden" id="copy">${escapeHtml(copyHtml)}</textarea>
 <script>
-async function copyArticle(){
+function copyArticle(){
   const html = document.getElementById('copy').value;
-  const plain = document.getElementById('article').innerText;
-  try{
-    if (navigator.clipboard && window.ClipboardItem) {
-      await navigator.clipboard.write([
-        new ClipboardItem({
-          'text/html': new Blob([html], {type:'text/html'}),
-          'text/plain': new Blob([plain], {type:'text/plain'})
-        })
-      ]);
-      alert('已复制富文本，可直接粘贴到公众号图文正文区域');
-      return;
-    }
-  }catch(e){}
-  const range = document.createRange();
-  const article = document.getElementById('article');
-  range.selectNodeContents(article);
-  const sel = window.getSelection();
+  // 创建临时 iframe，写入富文本后全选复制，兼容 file:// 协议
+  const iframe = document.createElement('iframe');
+  iframe.style.cssText = 'position:fixed;left:-9999px;top:-9999px;width:1px;height:1px;opacity:0;border:0';
+  document.body.appendChild(iframe);
+  const doc = iframe.contentDocument || iframe.contentWindow.document;
+  doc.open(); doc.write(html); doc.close();
+  const range = doc.createRange();
+  range.selectNodeContents(doc.body);
+  const sel = iframe.contentWindow.getSelection();
   sel.removeAllRanges();
   sel.addRange(range);
-  document.execCommand('copy');
-  sel.removeAllRanges();
-  alert('已复制页面富文本，可粘贴到公众号图文正文区域');
+  const ok = doc.execCommand('copy');
+  document.body.removeChild(iframe);
+  if (ok) {
+    alert('已复制富文本，可直接粘贴到公众号图文正文区域');
+  } else {
+    // 最终兜底：选中页面文章区域
+    const art = document.getElementById('article');
+    const r2 = document.createRange();
+    r2.selectNodeContents(art);
+    const s2 = window.getSelection();
+    s2.removeAllRanges(); s2.addRange(r2);
+    document.execCommand('copy');
+    s2.removeAllRanges();
+    alert('已复制富文本，可直接粘贴到公众号图文正文区域');
+  }
 }
 async function copyCoverPrompt(){
   const text = document.getElementById('coverPrompt').value;
