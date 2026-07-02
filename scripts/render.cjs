@@ -409,18 +409,6 @@ const previewHtml = `<!doctype html>
 <title>${escapeHtml(title)} - Pxlsan WeChat Preview</title>
 <style>
 body{margin:0;background:#f8fafc;color:#1e293b;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Microsoft YaHei',sans-serif}.wrap{max-width:980px;margin:0 auto;padding:28px 16px}.toolbar{position:sticky;top:0;z-index:2;margin:0 0 18px;padding:14px 16px;border:1px solid #DBEAFE;border-radius:18px;background:rgba(248,250,252,.94);backdrop-filter:blur(10px);display:flex;gap:12px;align-items:center;justify-content:space-between}.toolbar h1{margin:0;font-size:16px;color:#2563EB}.toolbar button{border:0;border-radius:12px;background:linear-gradient(135deg,#2563EB,#7C3AED);color:white;font-weight:800;padding:10px 14px;cursor:pointer}.phone{max-width:720px;margin:0 auto;border-radius:26px;overflow:hidden;border:1px solid #DBEAFE;box-shadow:0 20px 60px rgba(37,99,235,.12)}.cover-box{max-width:720px;margin:24px auto 0;border-radius:18px;border:1px solid #DBEAFE;background:#EEF2FF;padding:18px 20px}.cover-box h2{margin:0 0 10px;font-size:14px;color:#2563EB;font-weight:800;letter-spacing:.5px}.cover-box textarea{width:100%;box-sizing:border-box;border:1px solid #DBEAFE;border-radius:10px;padding:12px;font-size:13px;line-height:1.7;color:#1E293B;background:#fff;resize:vertical;min-height:120px;font-family:inherit}.cover-box button{margin-top:10px;border:0;border-radius:10px;background:linear-gradient(135deg,#2563EB,#7C3AED);color:white;font-weight:800;padding:8px 14px;cursor:pointer;font-size:13px}textarea.hidden{position:fixed;left:-9999px;top:-9999px}</style>
-</head>
-<body>
-<div class="wrap">
-  <div class="toolbar"><h1>Pxlsan WeChat Preview</h1><button onclick="copyArticle()">复制到公众号编辑器</button></div>
-  <div class="phone" id="article">${copyHtml}</div>
-  <div class="cover-box">
-    <h2>🖼 封面图 Prompt（复制到即梦 / Midjourney）</h2>
-    <textarea id="coverPrompt">${escapeHtml(coverPrompt)}</textarea>
-    <button onclick="copyCoverPrompt()">复制 Prompt</button>
-  </div>
-</div>
-<textarea class="hidden" id="copy">${escapeHtml(copyHtml)}</textarea>
 <script>
 function copyArticle(){
   const article = document.getElementById('article');
@@ -441,7 +429,19 @@ async function copyCoverPrompt(){
   }
   alert('封面 Prompt 已复制，可粘贴到即梦 / Midjourney');
 }
-
+</script>
+</head>
+<body>
+<div class="wrap">
+  <div class="toolbar"><h1>Pxlsan WeChat Preview</h1><button onclick="copyArticle()">复制到公众号编辑器</button></div>
+  <div class="phone" id="article">${copyHtml}</div>
+  <div class="cover-box">
+    <h2>🖼 封面图 Prompt（复制到即梦 / Midjourney）</h2>
+    <textarea id="coverPrompt">${escapeHtml(coverPrompt)}</textarea>
+    <button onclick="copyCoverPrompt()">复制 Prompt</button>
+  </div>
+</div>
+<textarea class="hidden" id="copy">${escapeHtml(copyHtml)}</textarea>
 </body>
 </html>`;
 
